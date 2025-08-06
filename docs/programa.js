@@ -1,42 +1,54 @@
-document.addEventListener('DOMContentLoaded', async function () {
-  const mapa = L.map('mapa');
+// Inicializar el mapa
+const mapa = L.map('mapa');
 
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Añadir capa base
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(mapa);
+}).addTo(mapa);
 
-  const gpxText = await fetch('ruta.gpx').then(res => res.text());
-  const parser = new DOMParser();
-  const gpxDoc = parser.parseFromString(gpxText, 'application/xml');
-  const trkpts = gpxDoc.getElementsByTagName('trkpt');
-
-  const coords = [];
-
-  // Diccionario de horas de fotos mapeadas a sus imágenes
-  const horaImagenes = {
-    "2024-08-05T14:00:00Z": "imagenes/1.jpg",
-    "2024-08-05T14:05:00Z": "imagenes/2.jpg",
-    "2024-08-05T14:10:00Z": "imagenes/3.jpg"
-  };
-
-  for (let i = 0; i < trkpts.length; i++) {
-    const trkpt = trkpts[i];
-    const lat = parseFloat(trkpt.getAttribute('lat'));
-    const lon = parseFloat(trkpt.getAttribute('lon'));
-    coords.push([lat, lon]);
-
-    const timeTag = trkpt.getElementsByTagName('time')[0];
-    if (timeTag) {
-      const time = timeTag.textContent.trim();
-      if (horaImagenes[time]) {
-        const marker = L.marker([lat, lon]).addTo(mapa);
-        marker.bindPopup(`<img src="${horaImagenes[time]}" alt="Imagen tomada a las ${time}" width="200">`);
-      }
+// Cargar archivo GPX
+const gpxLayer = new L.GPX("ruta.gpx", {
+    async: true,
+    marker_options: {
+        startIconUrl: '',
+        endIconUrl: '',
+        shadowUrl: ''
     }
-  }
+}).on('loaded', function(e) {
+    mapa.fitBounds(e.target.getBounds());
+}).addTo(mapa);
 
-  if (coords.length > 0) {
-    const linea = L.polyline(coords, { color: 'blue' }).addTo(mapa);
-    mapa.fitBounds(linea.getBounds());
-  }
+// Lista de imágenes con su hora (formato HH:MM:SS)
+const imagenes = [
+    { hora: "20:13:53", archivo: "3.jpg" },
+    { hora: "20:15:51", archivo: "4.jpg" },
+    { hora: "20:22:01", archivo: "5.jpg" },
+    { hora: "20:22:01", archivo: "6.jpg" },
+    { hora: "20:22:01", archivo: "7.jpg" },
+    { hora: "20:22:01", archivo: "8.jpg" }
+];
+
+// Después que cargue la capa GPX, agregar marcadores con las imágenes
+gpxLayer.on('loaded', function(e) {
+    const layers = e.target.getLayers();
+
+    layers.forEach(layer => {
+        const puntos = layer.getLatLngs();
+        const tiempos = layer._info?.track?.[0]?.coordTimes || [];
+
+        puntos.forEach((punto, i) => {
+            const time = tiempos[i];
+            if (!time) return;
+
+            const horaPunto = new Date(time).toTimeString().split(' ')[0];
+
+            imagenes.forEach(img => {
+                if (horaPunto.startsWith(img.hora)) {
+                    L.marker(punto)
+                        .addTo(mapa)
+                        .bindPopup(`<img src="${img.archivo}" width="200">`);
+                }
+            });
+        });
+    });
 });
